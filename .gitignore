@@ -1,0 +1,31 @@
+# Gradle / 构建产物
+*.iml
+.gradle/
+.kotlin/
+build/
+/captures
+.externalNativeBuild
+.cxx
+
+# 本地环境配置（含本机 SDK 路径）
+local.properties
+
+# IDE
+.idea/
+
+# 签名密钥（切勿提交到仓库）
+keystore/
+keystore.properties
+*.jks
+*.keystore
+
+# 构建出的 APK（对外发布请使用 GitHub Releases）
+*.apk
+
+# 本地工具与验证产物
+.tools/
+.shots/
+.v2c/
+.zcode/
+.zcodeignore
+.DS_Store
