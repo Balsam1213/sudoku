@@ -1,5 +1,7 @@
 # 数独（Sudoku）
 
+中文 | [English](README_EN.md)
+
 一款纯离线的安卓数独游戏，使用 Kotlin + Jetpack Compose（Material 3）从零实现，无需任何网络权限，无需登录。
 
 ## 功能
