@@ -1,66 +1,66 @@
-# 数独（Sudoku）
+# Sudoku
 
-中文 | [English](README_EN.md)
+English | [中文（简体）](README_ZH.md)
 
-一款纯离线的安卓数独游戏，使用 Kotlin + Jetpack Compose（Material 3）从零实现，无需任何网络权限，无需登录。
+A fully offline Android Sudoku game built from scratch with Kotlin + Jetpack Compose (Material 3). No Internet permission, no login, no tracking.
 
-## 功能
+## Features
 
-- **六档难度**：初学者 / 简单 / 中级 / 困难 / 专家 / 极端（挖空数 25/35/45/54/58/60+）
-- **题目质量保证**：自研位掩码 + MRV 回溯求解器，挖洞时每移除一个数字都验证解仍然唯一——每道题必有且仅有一个解
-- **完整玩法**：铅笔笔记（冲突候选自动拒绝）、撤销/重做、擦除、提示、冲突即时标红、行列宫与同数字高亮
-- **闪电模式**：锁定一个数字依次填入所有格子，填满自动切换下一个；新局默认开启
-- **每日挑战**：按近期游玩难度自适应出题，同一天全网同题（日期种子生成），当月全勤获得该月专属奖杯
-- **成就系统**：72 个成就、13 个分组（每难度里程碑、铅笔/提示/累计天数/每日挑战等），累计型成就带进度条，对局中解锁以非阻塞横幅 + 音效提示
-- **战绩统计**：各难度最佳/平均用时与胜率、当前与最长连续天数、累计完成天数、最近 50 局记录
-- **分享**：对局中分享题目图片，结算页分享完成盘面与成绩
-- **其他**：浅色/深色/跟随系统主题、可限制错误 3 次判负、音效与震动反馈、对局自动存档随时继续
+- **Six difficulty levels**: Beginner / Easy / Medium / Hard / Expert / Extreme (25/35/45/54/58/60+ empty cells)
+- **Guaranteed puzzle quality**: a hand-written bitmask + MRV backtracking solver verifies that the puzzle still has a unique solution after every cell is removed — every puzzle has exactly one solution
+- **Complete gameplay**: pencil notes (conflicting candidates are rejected automatically), undo/redo, erase, hints, instant conflict highlighting, row/column/box and same-digit highlighting
+- **Lightning mode**: lock a digit and fill every matching cell one by one; advances to the next digit automatically. Enabled by default for every new game
+- **Daily challenge**: difficulty adapts to how you usually play; the same puzzle for everyone on a given day (date-seeded generation); complete every day of a month to earn that month's trophy
+- **Achievements**: 72 achievements in 13 groups (per-difficulty milestones, pencil/hints/cumulative days/daily challenges, etc.), progress bars for cumulative ones, and non-blocking banner + sound when unlocked mid-game
+- **Stats**: best/average time and win rate per difficulty, current & longest streak, total active days, last 50 games
+- **Share**: share the puzzle as an image during a game, or share the completed board and your result on the win screen
+- **Extras**: light/dark/system themes, optional 3-mistakes loss rule, sound & haptic feedback, auto-saved games you can resume anytime
 
-## 技术要点
+## Technical Highlights
 
-- Kotlin + Jetpack Compose（BOM）/ Material 3，单 Activity，MVVM
-- Room（战绩 / 成就 / 每日挑战 / 月度奖杯，含 v1→v2 迁移）+ DataStore（设置与对局存档）
-- 数独生成与求解引擎为纯 Kotlin 实现，含唯一解单元测试
-- R8 代码压缩与资源收缩，release APK 约 1.4 MB
-- 最低支持 Android 8.0（API 26）
+- Kotlin + Jetpack Compose (BOM) / Material 3, single Activity, MVVM
+- Room (records / achievements / daily challenges / month trophies, with a v1→v2 migration) + DataStore (settings and game saves)
+- Pure-Kotlin Sudoku generation & solving engine with unit tests covering the unique-solution guarantee
+- R8 code & resource shrinking; release APK is about 1.4 MB
+- Minimum Android 8.0 (API 26)
 
-## 构建与运行
+## Build & Run
 
 ```bash
-./gradlew installDebug        # 构建并安装调试包（需已连接设备/模拟器）
-./gradlew testDebugUnitTest   # 运行单元测试（生成器唯一解保证等）
-./gradlew assembleRelease     # 构建 release 包
+./gradlew installDebug        # Build and install the debug build (device/emulator required)
+./gradlew testDebugUnitTest   # Run unit tests (unique-solution guarantee, etc.)
+./gradlew assembleRelease     # Build the release package
 ```
 
-要求：JDK 17+，Android SDK（`local.properties` 中配置 `sdk.dir`，此文件不入库，首次克隆后需自行创建）。
+Requirements: JDK 17+, Android SDK (configure `sdk.dir` in `local.properties`; this file is not committed — create it after cloning).
 
-## 关于签名
+## About Signing
 
-`keystore/` 与 `keystore.properties`（release 签名密钥）**有意不入库**。克隆后若需构建 release，请自建密钥并在项目根目录创建 `keystore.properties`：
+`keystore/` and `keystore.properties` (the release signing key) are **intentionally not committed**. To build a release after cloning, create your own key and a `keystore.properties` file in the project root:
 
 ```properties
-storeFile=keystore/你的密钥.jks
-storePassword=你的密码
-keyAlias=你的别名
-keyPassword=你的密码
+storeFile=keystore/your-key.jks
+storePassword=your-password
+keyAlias=your-alias
+keyPassword=your-password
 ```
 
-未提供密钥时 release 构建会生成未签名包，debug 构建不受影响。
+Without a key the release build produces an unsigned package; debug builds are unaffected.
 
-## 目录结构
+## Project Structure
 
 ```
 app/src/main/java/com/balsam/sudoku/
-├── game/          # 数独引擎（生成器、求解器、规则判定）
-├── data/          # Room 数据库与 DataStore 仓库
-├── achievements/  # 成就定义与判定引擎
+├── game/          # Sudoku engine (generator, solver, rules)
+├── data/          # Room database and DataStore repositories
+├── achievements/  # Achievement definitions and evaluation engine
 ├── ui/
-│   ├── menu/      # 主菜单（每日挑战、难度选择）
-│   ├── play/      # 对局界面（棋盘、键盘、闪电模式）
-│   ├── stats/     # 战绩统计
-│   ├── achievements/ # 成就页
-│   ├── settings/  # 设置
-│   ├── common/    # 分享图片、音效、格式化工具
-│   └── theme/     # 主题
+│   ├── menu/      # Main menu (daily challenge, difficulty selection)
+│   ├── play/      # Game screen (board, keypad, lightning mode)
+│   ├── stats/     # Statistics
+│   ├── achievements/ # Achievements page
+│   ├── settings/  # Settings
+│   ├── common/    # Share image, sound, formatting utilities
+│   └── theme/     # Theming
 └── MainActivity.kt
 ```
