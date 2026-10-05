@@ -86,12 +86,17 @@ private data class Snapshot(
     val notes: List<Set<Int>>,
 )
 
-class GameViewModel(private val app: SudokuApp, private val difficultyName: String) : ViewModel() {
+class GameViewModel(
+    private val app: SudokuApp,
+    private val difficultyName: String,
+    private val dailyDate: String? = null,
+) : ViewModel() {
 
     private val settingsRepository = app.settingsRepository
     private val recordDao = app.database.gameRecordDao()
     private val dailyChallengeDao = app.database.dailyChallengeDao()
     private val monthTrophyDao = app.database.monthTrophyDao()
+    private val dailyPlanDao = app.database.dailyPlanDao()
     private val achievementEngine = AchievementEngine(
         app.database.achievementDao(),
         recordDao,
@@ -99,8 +104,16 @@ class GameViewModel(private val app: SudokuApp, private val difficultyName: Stri
     )
     private val generator = SudokuGenerator()
 
+    /** 每日挑战的目标日期（普通对局为 null；从存档恢复时由存档给出）。 */
+    private var targetDate: java.time.LocalDate? = if (difficultyName == "daily") {
+        runCatching { java.time.LocalDate.parse(dailyDate ?: "") }.getOrNull()
+            ?: java.time.LocalDate.now()
+    } else {
+        null
+    }
+
     /** 本局是否为每日挑战。 */
-    private val isDaily = difficultyName == "daily"
+    private var isDaily = targetDate != null
 
     private val _state = MutableStateFlow(GameUiState())
     val state: StateFlow<GameUiState> = _state
@@ -119,7 +132,25 @@ class GameViewModel(private val app: SudokuApp, private val difficultyName: Stri
         viewModelScope.launch {
             when (difficultyName) {
                 "continue" -> restoreSavedGame()
-                "daily" -> startNewGame(suggestDailyDifficulty())
+                "daily" -> {
+                    val date = targetDate!!
+                    // 该日期有进行中的存档 → 继续对局（而不是重开）
+                    val existing = settingsRepository.currentGame.first()
+                    if (existing != null && existing.dailyDate == date.toString()) {
+                        restoreSavedGame()
+                    } else {
+                        // 出题计划：同一天永远同一难度同一道题（首次进入时计算并记录）
+                        val plan = dailyPlanDao.getByDate(date.toString())
+                        val difficulty = plan?.let {
+                            runCatching { Difficulty.valueOf(it.difficulty) }.getOrNull()
+                        } ?: suggestDailyDifficulty().also {
+                            dailyPlanDao.insertIfAbsent(
+                                com.balsam.sudoku.data.DailyPlanEntity(date.toString(), it.name),
+                            )
+                        }
+                        startNewGame(difficulty, seed = date.toEpochDay())
+                    }
+                }
                 else -> startNewGame(Difficulty.fromName(difficultyName))
             }
             val settings = settingsRepository.settings.first()
@@ -194,7 +225,18 @@ class GameViewModel(private val app: SudokuApp, private val difficultyName: Stri
                 hintsUsed = save.hintsUsed,
                 notesUsed = save.notesUsed,
                 finished = false,
+                // 按存档恢复退出前的闪电模式状态
+                lightningMode = save.lightningMode,
+                lightningDigit = save.lightningDigit,
+                isDaily = save.dailyDate != null,
             )
+        }
+        // 恢复每日挑战的日期归属（影响完成记录落库日期）
+        save.dailyDate?.let { d ->
+            runCatching { java.time.LocalDate.parse(d) }.getOrNull()?.let {
+                targetDate = it
+                isDaily = true
+            }
         }
         startTicker()
         // 恢复的棋局可能已是完成状态（如进程在结算前被杀），补一次胜利判定
@@ -254,6 +296,20 @@ class GameViewModel(private val app: SudokuApp, private val difficultyName: Stri
                 }
                 emit(GameFeedback.SELECT_CELL)
                 persistSave()
+                return
+            }
+            // 点击棋盘上的数字 = 选中该数字：切换锁定数字并选中其最上方的格子；
+            // 点的就是当前锁定数字时，仅把选中格切到所点的格子
+            val tapped = s.values[index]
+            if (tapped in 1..9) {
+                _state.update {
+                    if (tapped == digit) it.copy(selected = index)
+                    else it.copy(
+                        lightningDigit = tapped,
+                        selected = GameLogic.topmostCellOfDigit(it.values, tapped),
+                    )
+                }
+                emit(GameFeedback.SELECT_DIGIT)
                 return
             }
             // 闪电填数：任何空格都可以填入（填错会计入错误），填满 9 个后自动切换
@@ -472,8 +528,14 @@ class GameViewModel(private val app: SudokuApp, private val difficultyName: Stri
             ?: return
         val value = solution[target]
         placeValue(target, value)
+        val wasLightning = _state.value.lightningMode
         _state.update {
-            it.copy(selected = target, hintsUsed = it.hintsUsed + 1)
+            it.copy(
+                selected = target,
+                hintsUsed = it.hintsUsed + 1,
+                // 闪电模式下，提示给出的数字成为新的锁定数字
+                lightningDigit = if (wasLightning) value else it.lightningDigit,
+            )
         }
         // 提示累计里程碑（历史合计 + 本局已用）
         viewModelScope.launch {
@@ -481,8 +543,8 @@ class GameViewModel(private val app: SudokuApp, private val difficultyName: Stri
             val newly = achievementEngine.evaluateHintMilestones(pastTotal + _state.value.hintsUsed)
             enqueuePopups(newly)
         }
-        if (_state.value.lightningMode) {
-            scheduleLightningAdvance(_state.value.lightningDigit ?: return)
+        if (wasLightning) {
+            scheduleLightningAdvance(value)
         }
         persistSave()
     }
@@ -552,14 +614,14 @@ class GameViewModel(private val app: SudokuApp, private val difficultyName: Stri
             ),
         )
 
-        // 每日挑战：当天首次完成才记录，随后检查月度全勤奖杯
+        // 每日挑战：该日期首次完成才记录，随后检查月度全勤奖杯
         var dailyFirstWin = false
         val trophyDefs = mutableListOf<AchievementDef>()
         if (isDaily) {
-            val today = java.time.LocalDate.now()
+            val recordDate = targetDate ?: java.time.LocalDate.now()
             dailyFirstWin = dailyChallengeDao.insertIfAbsent(
                 com.balsam.sudoku.data.DailyChallengeEntity(
-                    date = today.toString(),
+                    date = recordDate.toString(),
                     difficulty = difficulty.name,
                     durationSeconds = s.elapsedSeconds,
                     mistakes = s.mistakes,
@@ -568,7 +630,7 @@ class GameViewModel(private val app: SudokuApp, private val difficultyName: Stri
                 ),
             ) != -1L
             if (dailyFirstWin) {
-                val month = java.time.YearMonth.from(today)
+                val month = java.time.YearMonth.from(recordDate)
                 val monthDates = dailyChallengeDao.monthDates(month.toString()).toSet()
                 if (AchievementEngine.isMonthComplete(monthDates, month)) {
                     val inserted = monthTrophyDao.unlock(
@@ -603,7 +665,9 @@ class GameViewModel(private val app: SudokuApp, private val difficultyName: Stri
                 isDailyWin = isDaily && dailyFirstWin,
             ),
         )
-        settingsRepository.saveCurrentGame(null)
+        viewModelScope.launch(kotlinx.coroutines.NonCancellable) {
+            settingsRepository.saveCurrentGame(null)
+        }
         _state.update {
             it.copy(
                 finished = true,
@@ -649,7 +713,9 @@ class GameViewModel(private val app: SudokuApp, private val difficultyName: Stri
                 bestTimeBefore = null,
             ),
         )
-        settingsRepository.saveCurrentGame(null)
+        viewModelScope.launch(kotlinx.coroutines.NonCancellable) {
+            settingsRepository.saveCurrentGame(null)
+        }
         _state.update { it.copy(finished = true, lost = true) }
     }
 
@@ -682,7 +748,9 @@ class GameViewModel(private val app: SudokuApp, private val difficultyName: Stri
                     bestTimeBefore = null,
                 ),
             )
+            viewModelScope.launch(kotlinx.coroutines.NonCancellable) {
             settingsRepository.saveCurrentGame(null)
+        }
         }
     }
 
@@ -699,15 +767,21 @@ class GameViewModel(private val app: SudokuApp, private val difficultyName: Stri
             mistakes = s.mistakes,
             hintsUsed = s.hintsUsed,
             notesUsed = s.notesUsed,
+            lightningMode = s.lightningMode,
+            lightningDigit = s.lightningDigit,
+            dailyDate = targetDate?.toString(),
         )
-        viewModelScope.launch { settingsRepository.saveCurrentGame(save) }
+        // NonCancellable：退出对局销毁 ViewModel 时也不会取消落盘
+        viewModelScope.launch(kotlinx.coroutines.NonCancellable) {
+            settingsRepository.saveCurrentGame(save)
+        }
     }
 
     fun playNext() {
         viewModelScope.launch {
             if (isDaily) {
                 // 每日挑战再来一局：同题重玩（不计奖励由完成时的首次判定保证）
-                startNewGame(_state.value.difficulty, seed = java.time.LocalDate.now().toEpochDay())
+                startNewGame(_state.value.difficulty, seed = (targetDate ?: java.time.LocalDate.now()).toEpochDay())
             } else {
                 startNewGame(_state.value.difficulty)
             }

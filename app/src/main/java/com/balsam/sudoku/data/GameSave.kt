@@ -14,4 +14,9 @@ data class GameSave(
     val mistakes: Int,
     val hintsUsed: Int,
     val notesUsed: Boolean,
+    // 闪电模式状态（默认值保证旧存档可正常解析）
+    val lightningMode: Boolean = true,
+    val lightningDigit: Int? = null,
+    // 每日挑战的目标日期（普通对局为 null）
+    val dailyDate: String? = null,
 )

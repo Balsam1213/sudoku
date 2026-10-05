@@ -18,6 +18,26 @@ data class DailyChallengeEntity(
     val completedAt: Long,
 )
 
+/** 每日挑战出题计划：date 为 "yyyy-MM-dd"，首次进入该日期的对局时写入，保证同一天永远同一道题。 */
+@Entity(tableName = "daily_plans")
+data class DailyPlanEntity(
+    @PrimaryKey val date: String,
+    val difficulty: String,
+)
+
+@Dao
+interface DailyPlanDao {
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfAbsent(entity: DailyPlanEntity): Long
+
+    @Query("SELECT * FROM daily_plans WHERE date = :date")
+    suspend fun getByDate(date: String): DailyPlanEntity?
+
+    @Query("SELECT * FROM daily_plans WHERE date LIKE :monthPrefix || '%'")
+    suspend fun monthRows(monthPrefix: String): List<DailyPlanEntity>
+}
+
 /** 月度全勤奖杯：month 为 "yyyy-MM"。 */
 @Entity(tableName = "month_trophies")
 data class MonthTrophyEntity(
@@ -37,6 +57,10 @@ interface DailyChallengeDao {
 
     @Query("SELECT date FROM daily_challenges WHERE date LIKE :monthPrefix || '%'")
     suspend fun monthDates(monthPrefix: String): List<String>
+
+    /** 当月完成明细（日历展示用：日期、用时、难度）。 */
+    @Query("SELECT * FROM daily_challenges WHERE date LIKE :monthPrefix || '%' ORDER BY date")
+    suspend fun monthRows(monthPrefix: String): List<DailyChallengeEntity>
 
     @Query("SELECT COUNT(*) FROM daily_challenges")
     suspend fun countAll(): Int

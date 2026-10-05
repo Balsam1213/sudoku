@@ -13,8 +13,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AchievementEntity::class,
         DailyChallengeEntity::class,
         MonthTrophyEntity::class,
+        DailyPlanEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -22,6 +23,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun achievementDao(): AchievementDao
     abstract fun dailyChallengeDao(): DailyChallengeDao
     abstract fun monthTrophyDao(): MonthTrophyDao
+    abstract fun dailyPlanDao(): DailyPlanDao
 
     companion object {
         @Volatile
@@ -47,6 +49,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS daily_plans (" +
+                        "date TEXT NOT NULL PRIMARY KEY, " +
+                        "difficulty TEXT NOT NULL)",
+                )
+            }
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -54,7 +66,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "sudoku.db",
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { instance = it }
             }

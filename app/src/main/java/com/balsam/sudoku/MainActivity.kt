@@ -14,6 +14,7 @@ import androidx.navigation.NavType
 import com.balsam.sudoku.data.ThemeMode
 import com.balsam.sudoku.game.Difficulty
 import com.balsam.sudoku.ui.achievements.AchievementsScreen
+import com.balsam.sudoku.ui.menu.DailyCalendarScreen
 import com.balsam.sudoku.ui.menu.MenuScreen
 import com.balsam.sudoku.ui.play.GameScreen
 import com.balsam.sudoku.ui.settings.SettingsScreen
@@ -42,8 +43,8 @@ class MainActivity : ComponentActivity() {
                             onContinue = {
                                 navController.navigate("game/continue")
                             },
-                            onPlayDaily = {
-                                navController.navigate("game/daily")
+                            onOpenDailyCalendar = {
+                                navController.navigate("daily_calendar")
                             },
                             onOpenStats = { navController.navigate("stats") },
                             onOpenAchievements = { navController.navigate("achievements") },
@@ -51,14 +52,29 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     composable(
-                        route = "game/{difficulty}",
-                        arguments = listOf(navArgument("difficulty") { type = NavType.StringType }),
+                        route = "game/{difficulty}?date={date}",
+                        arguments = listOf(
+                            navArgument("difficulty") { type = NavType.StringType },
+                            navArgument("date") {
+                                type = NavType.StringType
+                                defaultValue = ""
+                            },
+                        ),
                     ) { entry ->
-                        val arg = entry.arguments?.getString("difficulty").orEmpty()
                         GameScreen(
                             app = app,
-                            difficultyName = arg,
+                            difficultyName = entry.arguments?.getString("difficulty").orEmpty(),
+                            dailyDate = entry.arguments?.getString("date").orEmpty(),
                             onBack = { navController.popBackStack() },
+                        )
+                    }
+                    composable("daily_calendar") {
+                        DailyCalendarScreen(
+                            app = app,
+                            onBack = { navController.popBackStack() },
+                            onPlayDate = { date ->
+                                navController.navigate("game/daily?date=$date")
+                            },
                         )
                     }
                     composable("stats") {

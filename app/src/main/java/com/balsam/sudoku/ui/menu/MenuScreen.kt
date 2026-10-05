@@ -61,7 +61,7 @@ fun MenuScreen(
     app: SudokuApp,
     onPlay: (Difficulty) -> Unit,
     onContinue: () -> Unit,
-    onPlayDaily: () -> Unit,
+    onOpenDailyCalendar: () -> Unit,
     onOpenStats: () -> Unit,
     onOpenAchievements: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -75,7 +75,6 @@ fun MenuScreen(
     val dailyInfo by vm.dailyInfo.collectAsStateWithLifecycle()
 
     var pendingDifficulty by remember { mutableStateOf<Difficulty?>(null) }
-    var showDailyReplayDialog by remember { mutableStateOf(false) }
 
     // 从对局返回菜单时刷新每日挑战状态
     LifecycleResumeEffect(Unit) {
@@ -166,9 +165,7 @@ fun MenuScreen(
             dailyInfo?.let { daily ->
                 DailyChallengeCard(
                     info = daily,
-                    onClick = {
-                        if (daily.completedToday) showDailyReplayDialog = true else onPlayDaily()
-                    },
+                    onClick = onOpenDailyCalendar,
                 )
                 Spacer(Modifier.height(12.dp))
             }
@@ -205,22 +202,6 @@ fun MenuScreen(
         )
     }
 
-    if (showDailyReplayDialog) {
-        AlertDialog(
-            onDismissRequest = { showDailyReplayDialog = false },
-            title = { Text("今日挑战已完成") },
-            text = { Text("可以重玩同一道题，但成绩不再计入每日挑战奖励。") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDailyReplayDialog = false
-                    onPlayDaily()
-                }) { Text("重玩") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDailyReplayDialog = false }) { Text("取消") }
-            },
-        )
-    }
 }
 
 @Composable

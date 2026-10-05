@@ -104,11 +104,12 @@ import kotlinx.coroutines.delay
 fun GameScreen(
     app: SudokuApp,
     difficultyName: String,
+    dailyDate: String? = null,
     onBack: () -> Unit,
 ) {
     val vm: GameViewModel = viewModel(
-        key = "game_$difficultyName",
-        factory = viewModelFactory { initializer { GameViewModel(app, difficultyName) } },
+        key = "game_$difficultyName${dailyDate?.let { "_$it" } ?: ""}",
+        factory = viewModelFactory { initializer { GameViewModel(app, difficultyName, dailyDate) } },
     )
     val state by vm.state.collectAsStateWithLifecycle()
     val haptics = LocalHapticFeedback.current
